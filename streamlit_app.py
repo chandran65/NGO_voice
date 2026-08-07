@@ -211,10 +211,17 @@ if nav_choice == "📞 Outbound Call Simulator":
                     
                     audio_url = turn.get("audio_url", "")
                     if audio_url:
-                        # Stream audio file
                         clean_path = audio_url.lstrip("/")
-                        if os.path.exists(clean_path):
-                            st.audio(clean_path, format="audio/mp3")
+                        abs_file = Path(clean_path)
+                        if not abs_file.exists():
+                            abs_file = Path(__file__).resolve().parent / clean_path
+                        if abs_file.exists():
+                            try:
+                                with open(abs_file, "rb") as f:
+                                    audio_bytes = f.read()
+                                st.audio(audio_bytes, format="audio/mp3", autoplay=True)
+                            except Exception as e:
+                                st.warning(f"Audio playback note: {e}")
 
         # Custom Speech Input Box
         if st.session_state.active_session_id:
