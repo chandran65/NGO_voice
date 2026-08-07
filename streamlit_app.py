@@ -15,6 +15,7 @@ from app.config import INTENTS_REGISTRY
 from app.services.intent import IntentClassifier
 from app.services.conversation_manager import ConversationManager, ACTIVE_OUTBOUND_CALLS
 from app.services.backend_api import BackendAPIService
+from app.services.stt import STTService
 
 try:
     from scripts.seed_ngo_data import seed_ngo_database
@@ -210,22 +211,60 @@ if nav_choice == "📞 Outbound Call Simulator":
                     """, unsafe_allow_html=True)
                     
                     audio_url = turn.get("audio_url", "")
-                    if audio_url:
-                        clean_path = audio_url.lstrip("/")
-                        abs_file = Path(clean_path)
-                        if not abs_file.exists():
-                            abs_file = Path(__file__).resolve().parent / clean_path
-                        if abs_file.exists():
+                    intent_code = str(turn.get("intent", "GREETING")).lower()
+                    
+                    possible_paths = [
+                        Path(audio_url.lstrip("/")),
+                        Path(__file__).resolve().parent / audio_url.lstrip("/"),
+                        Path(__file__).resolve().parent / "audio" / "ta" / f"{intent_code}.mp3",
+                        Path(__file__).resolve().parent / "audio" / "ta" / "greeting.mp3"
+                    ]
+                    
+                    for p in possible_paths:
+                        if p.exists() and p.is_file():
                             try:
-                                with open(abs_file, "rb") as f:
-                                    audio_bytes = f.read()
-                                st.audio(audio_bytes, format="audio/mp3", autoplay=True)
+                                with open(p, "rb") as f:
+                                    st.audio(f.read(), format="audio/mp3", autoplay=True)
+                                break
                             except Exception as e:
-                                st.warning(f"Audio playback note: {e}")
+                                pass
 
-        # Custom Speech Input Box
+        # Custom Speech Input Box & Microphone Voice Recorder
         if st.session_state.active_session_id:
-            user_speech_text = st.text_input("💬 Type or Speak Tamil Response:", placeholder="e.g. 80G வரி விலக்கு சான்றிதழ் தருவீங்களா...")
+            st.markdown("---")
+            st.markdown("#### 🎙️ Customer Voice Capture")
+            
+            mic_audio = None
+            if hasattr(st, "audio_input"):
+                mic_audio = st.audio_input("🔴 Tap Microphone to Record Tamil Response:")
+            else:
+                mic_audio = st.file_uploader("🎙️ Upload Customer Audio File (.wav / .mp3 / .aac):", type=["wav", "mp3", "aac", "ogg"])
+
+            if mic_audio is not None:
+                audio_bytes = mic_audio.read()
+                if audio_bytes and len(audio_bytes) > 50:
+                    stt = STTService()
+                    transcription, lang = stt.transcribe_audio_bytes(audio_bytes, "customer_mic.wav")
+                    
+                    if transcription and transcription.strip():
+                        db = SessionLocal()
+                        turn_res = ConversationManager.process_turn_text(
+                            db, st.session_state.active_session_id, transcription, force_language="ta"
+                        )
+                        db.close()
+                        
+                        st.session_state.transcript_history.append({"role": "customer", "text": transcription})
+                        st.session_state.transcript_history.append({
+                            "role": "agent",
+                            "intent": turn_res["intent"],
+                            "confidence": turn_res["confidence"],
+                            "text": turn_res["response_text"],
+                            "audio_url": turn_res["audio_url"],
+                            "escalated": turn_res["is_escalated"]
+                        })
+                        st.rerun()
+
+            user_speech_text = st.text_input("💬 Or Type Tamil Query:", placeholder="e.g. 80G வரி விலக்கு சான்றிதழ் தருவீங்களா...")
             if st.button("Send Speech Turn ➡️"):
                 if user_speech_text.strip():
                     db = SessionLocal()
