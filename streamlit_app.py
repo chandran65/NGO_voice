@@ -172,13 +172,36 @@ if nav_choice == "📞 Outbound Call Simulator":
             ("👥 ஏஜென்ட்", "நேரடியா ஏஜென்ட் கூட பேசுறேன்")
         ]
         
+def safe_process_turn_text(db, session_id, text_query, force_language="ta"):
+    if hasattr(ConversationManager, "process_turn_text"):
+        try:
+            return ConversationManager.process_turn_text(db, session_id, text_query, force_language=force_language)
+        except AttributeError:
+            pass
+            
+    classifier = IntentClassifier()
+    if hasattr(classifier, "predict"):
+        intent_res = classifier.predict(text_query, language=force_language)
+    else:
+        intent_code, lang, conf = classifier.classify(text_query, detected_lang=force_language)
+        intent_res = {"intent": intent_code, "confidence": conf}
+        
+    return ConversationManager.process_turn(
+        db=db,
+        session_id=session_id,
+        transcription=text_query,
+        detected_lang=force_language,
+        intent_code=intent_res["intent"],
+        confidence=intent_res["confidence"]
+    )
+
         for label, text_query in chips:
             if st.button(label, use_container_width=True, key=f"chip_{label}"):
                 if st.session_state.active_session_id is None:
                     st.warning("Please initiate an outbound call first!")
                 else:
                     db = SessionLocal()
-                    turn_res = ConversationManager.process_turn_text(
+                    turn_res = safe_process_turn_text(
                         db, st.session_state.active_session_id, text_query, force_language="ta"
                     )
                     db.close()
@@ -190,7 +213,7 @@ if nav_choice == "📞 Outbound Call Simulator":
                         "confidence": turn_res["confidence"],
                         "text": turn_res["response_text"],
                         "audio_url": turn_res["audio_url"],
-                        "escalated": turn_res["is_escalated"]
+                        "escalated": turn_res.get("is_escalated") or turn_res.get("escalated", False)
                     })
                     st.rerun()
 
@@ -268,7 +291,7 @@ if nav_choice == "📞 Outbound Call Simulator":
                             transcription = "80G வரி விலக்கு சான்றிதழ் தருவீங்களா"
 
                         db = SessionLocal()
-                        turn_res = ConversationManager.process_turn_text(
+                        turn_res = safe_process_turn_text(
                             db, st.session_state.active_session_id, transcription, force_language="ta"
                         )
                         db.close()
@@ -280,7 +303,7 @@ if nav_choice == "📞 Outbound Call Simulator":
                             "confidence": turn_res["confidence"],
                             "text": turn_res["response_text"],
                             "audio_url": turn_res["audio_url"],
-                            "escalated": turn_res["is_escalated"]
+                            "escalated": turn_res.get("is_escalated") or turn_res.get("escalated", False)
                         })
                         st.rerun()
 
@@ -290,7 +313,7 @@ if nav_choice == "📞 Outbound Call Simulator":
                 
                 if submitted and user_speech_text.strip():
                     db = SessionLocal()
-                    turn_res = ConversationManager.process_turn_text(
+                    turn_res = safe_process_turn_text(
                         db, st.session_state.active_session_id, user_speech_text.strip(), force_language="ta"
                     )
                     db.close()
@@ -302,7 +325,7 @@ if nav_choice == "📞 Outbound Call Simulator":
                         "confidence": turn_res["confidence"],
                         "text": turn_res["response_text"],
                         "audio_url": turn_res["audio_url"],
-                        "escalated": turn_res["is_escalated"]
+                        "escalated": turn_res.get("is_escalated") or turn_res.get("escalated", False)
                     })
                     st.rerun()
 
