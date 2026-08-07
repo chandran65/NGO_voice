@@ -8,10 +8,10 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from app.database import engine, Base, SessionLocal
 from app.models import Campaign, CustomerProfile, AgentEscalation, CallSessionModel, CallTurnModel, QueryLog, SupervisorCallback
 
-def seed_database():
+def seed_database(db_session=None):
     print("Initializing SQLite Database Tables for NGO Fundraising Platform...")
     Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
+    db = db_session or SessionLocal()
 
     try:
         # Clear old mock data
@@ -116,6 +116,8 @@ def seed_database():
         print(f"Error seeding database: {e}")
     finally:
         db.close()
+
+seed_ngo_database = seed_database
 
 if __name__ == "__main__":
     seed_database()
