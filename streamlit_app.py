@@ -229,25 +229,36 @@ def safe_process_turn_text(db, session_id, text_query, force_language="ta"):
                 latest_turn = agent_turns[-1]
                 audio_url = latest_turn.get("audio_url", "")
                 intent_code = str(latest_turn.get("intent", "GREETING")).lower()
-                
+                audio_service = AudioRetrievalService()
+                _, abs_retrieved_path = audio_service.get_audio_path(intent_code.upper(), "ta")
+
                 possible_paths = [
+                    Path(abs_retrieved_path),
                     Path(audio_url.lstrip("/")),
                     Path(__file__).resolve().parent / audio_url.lstrip("/"),
+                    AUDIO_DIR / "ta" / f"{intent_code}.mp3",
+                    AUDIO_DIR / "ta" / f"{intent_code}.aac",
+                    AUDIO_DIR / "ta" / f"{intent_code}.ogg",
                     Path(__file__).resolve().parent / "audio" / "ta" / f"{intent_code}.mp3",
                     Path(__file__).resolve().parent / "audio" / "ta" / f"{intent_code}.aac",
                     Path(__file__).resolve().parent / "audio" / "ta" / f"{intent_code}.ogg",
-                    Path(__file__).resolve().parent / "audio" / "ta" / "greeting.mp3"
+                    AUDIO_DIR / "ta" / "greeting.mp3"
                 ]
                 
+                audio_played = False
                 for p in possible_paths:
                     if p.exists() and p.is_file():
                         try:
-                            st.markdown(f"**🔊 Now Playing Agent Response:** `{intent_code.upper()}`")
+                            st.markdown(f"**🔊 Now Playing Agent Response:** `{intent_code.upper()}` ({p.name})")
                             with open(p, "rb") as f:
                                 st.audio(f.read(), format="audio/mp3", autoplay=True)
+                            audio_played = True
                             break
                         except Exception as e:
                             pass
+                            
+                if not audio_played:
+                    st.warning(f"Audio file for {intent_code.upper()} path note: {audio_url}")
 
             # 2. Render Full Conversation Transcript History
             st.markdown("---")
