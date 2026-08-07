@@ -284,16 +284,18 @@ if nav_choice == "📞 Outbound Call Simulator":
                         })
                         st.rerun()
 
-            user_speech_text = st.text_input("💬 Or Type Tamil Query:", placeholder="e.g. 80G வரி விலக்கு சான்றிதழ் தருவீங்களா...")
-            if st.button("Send Speech Turn ➡️"):
-                if user_speech_text.strip():
+            with st.form(key="speech_turn_form", clear_on_submit=True):
+                user_speech_text = st.text_input("💬 Or Type Tamil Query:", placeholder="e.g. 80G வரி விலக்கு சான்றிதழ் தருவீங்களா...")
+                submitted = st.form_submit_button("Send Speech Turn ➡️", use_container_width=True)
+                
+                if submitted and user_speech_text.strip():
                     db = SessionLocal()
                     turn_res = ConversationManager.process_turn_text(
-                        db, st.session_state.active_session_id, user_speech_text, force_language="ta"
+                        db, st.session_state.active_session_id, user_speech_text.strip(), force_language="ta"
                     )
                     db.close()
                     
-                    st.session_state.transcript_history.append({"role": "customer", "text": user_speech_text})
+                    st.session_state.transcript_history.append({"role": "customer", "text": user_speech_text.strip()})
                     st.session_state.transcript_history.append({
                         "role": "agent",
                         "intent": turn_res["intent"],
