@@ -111,3 +111,12 @@ class IntentClassifier:
         logger.info(f"Classified: '{text}' -> Intent: {best_intent} (Score: {max_score}, Conf: {confidence})")
         return best_intent, detected_lang, confidence
 
+    def predict(self, text: str, language: str = "ta") -> Dict[str, Any]:
+        """Convenience method returning dict with intent and confidence score."""
+        intent_code, lang, conf = self.classify(text, detected_lang=language)
+        return {
+            "intent": intent_code,
+            "language": lang,
+            "confidence": conf
+        }
+
