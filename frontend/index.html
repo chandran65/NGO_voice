@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Outbound Voice Calling System with Human Handoff (Tamil)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="background-globes">
+        <div class="globe globe-1"></div>
+        <div class="globe globe-2"></div>
+        <div class="globe globe-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="icon-badge">🎙️</div>
+                <div>
+                    <h1>AI Outbound Voice Calling System</h1>
+                    <p class="subtitle">Natural Tamil Voice Engine • Campaign Scheduler • Backend Integration • Human Agent Handoff</p>
+                </div>
+            </div>
+            <div class="header-pills">
+                <span class="status-pill active"><span class="dot"></span> Telephony Server Live</span>
+                <span class="tech-pill">🇮🇳 Tamil STT & TTS</span>
+                <span class="tech-pill">👥 Human Escalation Ready</span>
+            </div>
+        </header>
+
+        <!-- Tab Navigation Bar -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="simulatorTab">
+                <span class="tab-icon">📞</span> Outbound Call Simulator
+            </button>
+            <button class="tab-btn" data-tab="campaignTab">
+                <span class="tab-icon">📋</span> Outbound Campaign & CRM
+            </button>
+            <button class="tab-btn" data-tab="handoffTab" id="handoffTabBtn">
+                <span class="tab-icon">🎧</span> Human Agent Handoff <span id="escalationBadgeCount" class="badge-count hidden">0</span>
+            </button>
+            <button class="tab-btn" data-tab="analyticsTab">
+                <span class="tab-icon">📊</span> Analytics & Reporting
+            </button>
+        </nav>
+
+        <!-- TAB 1: OUTBOUND CALL SIMULATOR -->
+        <div id="simulatorTab" class="tab-content active">
+            <div class="dashboard-grid">
+                <!-- Left: Smartphone Dialer & Live Call Screen -->
+                <section class="card glass-card phone-simulator-card">
+                    <div class="phone-header">
+                        <h2>📞 Outbound Call Telephony Screen</h2>
+                        <span id="callStateBadge" class="call-badge idle">IDLE</span>
+                    </div>
+
+                    <!-- Customer & Campaign Selector -->
+                    <div class="dialer-wrapper">
+                        <div class="input-label">Select Target Donor to Dial:</div>
+                        <div class="phone-number-box">
+                            <span class="phone-icon">📱</span>
+                            <select id="donorSelect" class="donor-select">
+                                <option value="+91 98765 43210" data-name="சுரேஷ் குமார் (Suresh Kumar)" data-policy="DON-80G-98234">
+                                    சுரேஷ் குமார் (+91 98765 43210) - DON-80G-98234
+                                </option>
+                                <option value="+91 98765 43211" data-name="பிரியா ராமச்சந்திரன் (Priya)" data-policy="DON-80G-77124">
+                                    பிரியா ராமச்சந்திரன் (+91 98765 43211) - DON-80G-77124
+                                </option>
+                                <option value="+91 98765 43212" data-name="கார்த்திக் (Karthik)" data-policy="DON-80G-55412">
+                                    கார்த்திக் சுப்ரமணியம் (+91 98765 43212) - DON-80G-55412
+                                </option>
+                            </select>
+                            <select id="callLanguageSelect" class="lang-select">
+                                <option value="ta" selected>🇮🇳 Tamil (தமிழ்)</option>
+                                <option value="en">🇬🇧 English</option>
+                            </select>
+                        </div>
+
+                        <div class="call-actions-row">
+                            <button id="startCallBtn" class="btn btn-call-start">
+                                <span class="btn-icon">📞</span> Start Outbound Call (Tamil Greeting)
+                            </button>
+                            <button id="endCallBtn" class="btn btn-call-end hidden">
+                                <span class="btn-icon">🚫</span> End Call
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Active Call Screen -->
+                    <div id="activeCallScreen" class="active-call-screen hidden">
+                        <div class="call-timer-box">
+                            <span class="timer-dot"></span> Call Duration: <strong id="callTimer">00:00</strong>
+                            <span class="active-donor-name" id="activeDonorDisplay">Donor: சுரேஷ் குமார்</span>
+                        </div>
+
+                        <!-- Escalation Warning Banner -->
+                        <div id="escalationAlertBanner" class="escalation-alert-banner hidden">
+                            ⚠️ CALL ESCALATED: Transferring call to live human agent console with full context...
+                        </div>
+
+                        <!-- Push-to-Talk Microphone & Speech Visualizer -->
+                        <div class="call-mic-wrapper">
+                            <div class="mic-button-ring" id="micRing">
+                                <button id="micBtn" class="mic-button" title="Speak in Tamil">
+                                    <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="recordingStatus" class="recording-status">Tap microphone to respond in Tamil</div>
+                            <canvas id="waveformCanvas" class="waveform-canvas" width="280" height="36"></canvas>
+                        </div>
+
+                        <!-- Text Query Input Simulator -->
+                        <div class="input-wrapper" style="margin-top: 10px;">
+                            <input type="text" id="textQueryInput" placeholder="Type a Tamil query (e.g. 80G வரி விலக்கு சான்றிதழ் தருவீங்களா?)" />
+                            <button id="submitTextBtn" class="btn btn-primary">Speak Turn</button>
+                        </div>
+
+                        <!-- Tamil Preset Quick Prompts -->
+                        <div class="preset-prompts">
+                            <span class="prompt-title">Quick Test Prompts (Tamil):</span>
+                            <div class="chips-container">
+                                <button class="chip" data-text="நன்கொடை பணம் எப்படி செலவு பண்றீங்க">💡 பணம் பயன்பாடு?</button>
+                                <button class="chip" data-text="80G வரி விலக்கு சான்றிதழ் தருவீங்களா">📜 80G வரி விலக்கு?</button>
+                                <button class="chip" data-text="எனக்கு ஜிபே பேமெண்ட் லிங்க் அனுப்புங்க">💳 ஜிபே லிங்க்</button>
+                                <button class="chip" data-text="மாதம் 1500 குழந்தை ஸ்பான்சர் பண்ணனும்">👶 குழந்தை ஸ்பான்சர்</button>
+                                <button class="chip" data-text="என் முகவரி மாற்ற வேண்டும்">🏠 முகவரி திருத்தம்</button>
+                                <button class="chip" data-text="என் 80G ரசீது வரல புகார் பதிவு பண்ணுங்க">⚠️ புகார் (Complaint)</button>
+                                <button class="chip" data-text="அதிகாரி கிட்ட பேசுறேன் ஏஜென்ட் கிட்ட மாத்துங்க">👥 ஏஜென்ட் (Human Handoff)</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Right: Real-Time Conversation Transcript & AI Decision Monitor -->
+                <section class="card glass-card conversation-panel">
+                    <div class="panel-header">
+                        <h2>💬 Live Call Transcript & AI Decision Engine</h2>
+                        <span class="subtitle-small">STT • Intent Classifier • Backend Query • Dual Response Generator</span>
+                    </div>
+
+                    <div id="transcriptBox" class="transcript-box">
+                        <div class="system-msg">
+                            <div class="system-icon">🤖</div>
+                            <div>Outbound call system ready. Select a donor and click <strong>Initiate Outbound Call</strong> to start.</div>
+                        </div>
+                    </div>
+
+                    <!-- Audio Player Box -->
+                    <div class="audio-player-wrapper">
+                        <div class="audio-meta">
+                            <span id="playingIntentBadge" class="intent-badge">IDLE</span>
+                            <span id="playingConfBadge" class="conf-badge">Score: 0.00</span>
+                        </div>
+                        <audio id="agentAudioPlayer" controls autoplay style="width: 100%; margin-top: 8px;"></audio>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- TAB 2: CAMPAIGN SCHEDULER & DONOR CRM -->
+        <div id="campaignTab" class="tab-content hidden">
+            <div class="card glass-card margin-bottom-lg">
+                <div class="panel-header">
+                    <h2>📋 Active Outbound Campaigns</h2>
+                    <p class="subtitle">Schedule automated calling campaigns for donor renewals, 80G tax certificates, and child sponsorship.</p>
+                </div>
+                <div class="campaign-summary-grid" id="campaignSummaryGrid">
+                    <!-- Dynamic campaign card rendered here -->
+                </div>
+            </div>
+
+            <div class="card glass-card">
+                <div class="panel-header">
+                    <h2>👥 Donor Profile & CRM Directory</h2>
+                    <p class="subtitle">Target donor records linked with policy IDs, donation history, and phone contacts.</p>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Donor ID</th>
+                                <th>Donor Name (Tamil / English)</th>
+                                <th>Phone Number</th>
+                                <th>Contribution Plan</th>
+                                <th>Donation Amount</th>
+                                <th>Due Date</th>
+                                <th>80G Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="donorCrmTableBody">
+                            <!-- Rendered dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: LIVE HUMAN AGENT HANDOFF CONSOLE -->
+        <div id="handoffTab" class="tab-content hidden">
+            <div class="dashboard-grid">
+                <!-- Left: Escalated Call Tickets Queue -->
+                <section class="card glass-card">
+                    <div class="panel-header">
+                        <h2>🎧 Escalated Calls Queue</h2>
+                        <p class="subtitle">Real-time queue of calls transferred from AI assistant requiring human intervention.</p>
+                    </div>
+                    <div id="escalationQueueList" class="escalation-queue-list">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </section>
+
+                <!-- Right: Active Call Handoff Screen & Transcript Context -->
+                <section class="card glass-card">
+                    <div class="panel-header">
+                        <h2>📋 Agent Handoff Screen & Full Context</h2>
+                        <p class="subtitle">Complete conversation summary and donor details transferred to live agent.</p>
+                    </div>
+
+                    <div id="handoffDetailView" class="handoff-detail-view">
+                        <div class="empty-state">Select an escalated call ticket from the queue to view full context.</div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- TAB 4: ANALYTICS & REPORTING -->
+        <div id="analyticsTab" class="tab-content hidden">
+            <div class="metrics-grid">
+                <div class="metric-card glass-card">
+                    <div class="metric-icon">📞</div>
+                    <div class="metric-value" id="statTotalCalls">14</div>
+                    <div class="metric-label">Total Outbound Calls</div>
+                </div>
+                <div class="metric-card glass-card">
+                    <div class="metric-icon">🤖</div>
+                    <div class="metric-value" id="statAiResolved">11</div>
+                    <div class="metric-label">AI Resolved Calls</div>
+                </div>
+                <div class="metric-card glass-card">
+                    <div class="metric-icon">👥</div>
+                    <div class="metric-value" id="statHumanEscalated">3</div>
+                    <div class="metric-label">Human Escalations</div>
+                </div>
+                <div class="metric-card glass-card">
+                    <div class="metric-icon">⚡</div>
+                    <div class="metric-value" id="statResolutionRate">78.6%</div>
+                    <div class="metric-label">AI Resolution Rate</div>
+                </div>
+                <div class="metric-card glass-card">
+                    <div class="metric-icon">🎯</div>
+                    <div class="metric-value" id="statAvgConf">0.89</div>
+                    <div class="metric-label">Avg STT Confidence</div>
+                </div>
+            </div>
+
+            <div class="card glass-card style-table-card margin-top-lg">
+                <div class="panel-header">
+                    <h2>📜 Recent Interaction Logs & Query History</h2>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Source</th>
+                                <th>Customer Speech (Transcript)</th>
+                                <th>Classified Intent</th>
+                                <th>Language</th>
+                                <th>Confidence</th>
+                                <th>Processing Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="analyticsLogsTableBody">
+                            <!-- Rendered dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer class="app-footer">
+            <p>AI-Powered Outbound Voice Calling System with Human Handoff • Modular, Scalable & Telephony-Driven Architecture</p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
