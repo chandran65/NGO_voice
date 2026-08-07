@@ -33,21 +33,30 @@ def convert_audio_to_wav_bytes(audio_bytes: bytes) -> bytes:
     except Exception as e:
         logger.warning(f"Pydub audio conversion note: {e}")
 
-    # 2. Try ffmpeg CLI if installed
+    # 2. Try imageio_ffmpeg / ffmpeg CLI
     try:
         import subprocess
+        import imageio_ffmpeg
+        ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
+        
         with tempfile.NamedTemporaryFile(suffix=".raw", delete=False) as in_tmp:
             in_tmp.write(audio_bytes)
             in_path = in_tmp.name
         
         out_path = in_path + ".wav"
-        cmd = ["ffmpeg", "-y", "-i", in_path, "-ar", "16000", "-ac", "1", "-f", "wav", out_path]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
+        cmd = [ffmpeg_bin, "-y", "-i", in_path, "-ar", "16000", "-ac", "1", "-f", "wav", out_path]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=8)
         if res.returncode == 0 and os.path.exists(out_path):
             with open(out_path, "rb") as f:
                 data = f.read()
-            os.unlink(in_path)
-            os.unlink(out_path)
+            try:
+                os.unlink(in_path)
+            except Exception:
+                pass
+            try:
+                os.unlink(out_path)
+            except Exception:
+                pass
             return data
     except Exception as e:
         logger.warning(f"FFmpeg CLI note: {e}")
