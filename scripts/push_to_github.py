@@ -49,10 +49,10 @@ def upload_file_via_api(file_path: Path, repo: str, token: str):
     
     try:
         with urllib.request.urlopen(req) as resp:
-            print(f"✅ Uploaded: {rel_path}")
+            print(f"Uploaded: {rel_path}")
             return True
     except Exception as e:
-        print(f"❌ Failed {rel_path}: {e}")
+        print(f"Failed {rel_path}: {e}")
         return False
 
 def main():
