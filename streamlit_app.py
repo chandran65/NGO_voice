@@ -232,37 +232,45 @@ if nav_choice == "📞 Outbound Call Simulator":
         # Custom Speech Input Box & Microphone Voice Recorder
         if st.session_state.active_session_id:
             st.markdown("---")
-            st.markdown("#### 🎙️ Customer Voice Capture")
+            st.markdown("#### 🎙️ Continuous Telephonic Voice Capture")
             
+            if "last_processed_audio_hash" not in st.session_state:
+                st.session_state.last_processed_audio_hash = None
+
             mic_audio = None
             if hasattr(st, "audio_input"):
-                mic_audio = st.audio_input("🔴 Tap Microphone to Record Tamil Response:")
+                mic_audio = st.audio_input("🔴 Speak into Microphone (Auto-submits when finished):")
             else:
                 mic_audio = st.file_uploader("🎙️ Upload Customer Audio File (.wav / .mp3 / .aac):", type=["wav", "mp3", "aac", "ogg"])
 
             if mic_audio is not None:
+                import hashlib
                 audio_bytes = mic_audio.read()
-                if audio_bytes and len(audio_bytes) > 50:
-                    stt = STTService()
-                    transcription, lang = stt.transcribe_audio_bytes(audio_bytes, "customer_mic.wav")
-                    
-                    if transcription and transcription.strip():
-                        db = SessionLocal()
-                        turn_res = ConversationManager.process_turn_text(
-                            db, st.session_state.active_session_id, transcription, force_language="ta"
-                        )
-                        db.close()
+                audio_hash = hashlib.md5(audio_bytes).hexdigest()
+                
+                if audio_bytes and len(audio_bytes) > 50 and audio_hash != st.session_state.last_processed_audio_hash:
+                    st.session_state.last_processed_audio_hash = audio_hash
+                    with st.spinner("⚡ Transcribing Tamil Voice & Matching Intent..."):
+                        stt = STTService()
+                        transcription, lang = stt.transcribe_audio_bytes(audio_bytes, "customer_mic.wav")
                         
-                        st.session_state.transcript_history.append({"role": "customer", "text": transcription})
-                        st.session_state.transcript_history.append({
-                            "role": "agent",
-                            "intent": turn_res["intent"],
-                            "confidence": turn_res["confidence"],
-                            "text": turn_res["response_text"],
-                            "audio_url": turn_res["audio_url"],
-                            "escalated": turn_res["is_escalated"]
-                        })
-                        st.rerun()
+                        if transcription and transcription.strip():
+                            db = SessionLocal()
+                            turn_res = ConversationManager.process_turn_text(
+                                db, st.session_state.active_session_id, transcription, force_language="ta"
+                            )
+                            db.close()
+                            
+                            st.session_state.transcript_history.append({"role": "customer", "text": transcription})
+                            st.session_state.transcript_history.append({
+                                "role": "agent",
+                                "intent": turn_res["intent"],
+                                "confidence": turn_res["confidence"],
+                                "text": turn_res["response_text"],
+                                "audio_url": turn_res["audio_url"],
+                                "escalated": turn_res["is_escalated"]
+                            })
+                            st.rerun()
 
             user_speech_text = st.text_input("💬 Or Type Tamil Query:", placeholder="e.g. 80G வரி விலக்கு சான்றிதழ் தருவீங்களா...")
             if st.button("Send Speech Turn ➡️"):
