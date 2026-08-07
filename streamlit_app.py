@@ -6,14 +6,20 @@ import streamlit as st
 from pathlib import Path
 
 # Add root directory to sys.path
-sys.path.append(str(Path(__file__).resolve().parent))
+root_dir = os.path.dirname(os.path.abspath(__file__))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
 from app.database import engine, Base, SessionLocal
 from app.config import INTENTS_REGISTRY
 from app.services.intent import IntentClassifier
 from app.services.conversation_manager import ConversationManager, ACTIVE_OUTBOUND_CALLS
 from app.services.backend_api import BackendAPIService
-from scripts.seed_ngo_data import seed_ngo_database
+
+try:
+    from scripts.seed_ngo_data import seed_ngo_database
+except Exception as e:
+    seed_ngo_database = None
 
 # Page Configuration
 st.set_page_config(
@@ -78,7 +84,11 @@ st.markdown("""
 def init_db():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-    seed_ngo_database(db)
+    if seed_ngo_database is not None:
+        try:
+            seed_ngo_database(db)
+        except Exception as e:
+            print(f"Database seed note: {e}")
     db.close()
     return True
 
