@@ -22,6 +22,32 @@ try:
 except Exception as e:
     seed_ngo_database = None
 
+from app.config import AUDIO_DIR
+from app.services.audio_retrieval import AudioRetrievalService
+
+def safe_process_turn_text(db, session_id, text_query, force_language="ta"):
+    if hasattr(ConversationManager, "process_turn_text"):
+        try:
+            return ConversationManager.process_turn_text(db, session_id, text_query, force_language=force_language)
+        except AttributeError:
+            pass
+            
+    classifier = IntentClassifier()
+    if hasattr(classifier, "predict"):
+        intent_res = classifier.predict(text_query, language=force_language)
+    else:
+        intent_code, lang, conf = classifier.classify(text_query, detected_lang=force_language)
+        intent_res = {"intent": intent_code, "confidence": conf}
+        
+    return ConversationManager.process_turn(
+        db=db,
+        session_id=session_id,
+        transcription=text_query,
+        detected_lang=force_language,
+        intent_code=intent_res["intent"],
+        confidence=intent_res["confidence"]
+    )
+
 # Page Configuration
 st.set_page_config(
     page_title="AI Outbound Voice Calling System - Tamil NGO",
@@ -179,29 +205,6 @@ if nav_choice == "📞 Outbound Call Simulator":
             ("👥 ஏஜென்ட்", "நேரடியா ஏஜென்ட் கூட பேசுறேன்")
         ]
         
-def safe_process_turn_text(db, session_id, text_query, force_language="ta"):
-    if hasattr(ConversationManager, "process_turn_text"):
-        try:
-            return ConversationManager.process_turn_text(db, session_id, text_query, force_language=force_language)
-        except AttributeError:
-            pass
-            
-    classifier = IntentClassifier()
-    if hasattr(classifier, "predict"):
-        intent_res = classifier.predict(text_query, language=force_language)
-    else:
-        intent_code, lang, conf = classifier.classify(text_query, detected_lang=force_language)
-        intent_res = {"intent": intent_code, "confidence": conf}
-        
-    return ConversationManager.process_turn(
-        db=db,
-        session_id=session_id,
-        transcription=text_query,
-        detected_lang=force_language,
-        intent_code=intent_res["intent"],
-        confidence=intent_res["confidence"]
-    )
-
         for label, text_query in chips:
             if st.button(label, use_container_width=True, key=f"chip_{label}"):
                 if st.session_state.active_session_id is None:
