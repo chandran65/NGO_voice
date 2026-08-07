@@ -160,6 +160,13 @@ if nav_choice == "📞 Outbound Call Simulator":
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
+        with st.expander("🎙️ Cloned Voice Showcase & Demo Sample", expanded=False):
+            st.markdown("**Sample Spoken Text:** *'வணக்கம்! எங்கள் அறக்கட்டளையின் ஆதரவற்ற குழந்தைகளின் குரலை நீங்கள் இப்போது கேட்கிறீர்கள். உங்கள் அன்பான உதவியால் 200-க்கும் மேற்பட்ட குழந்தைகள் சிறப்பாக பயின்று வருகிறார்கள்.'*")
+            cloned_audio_file = Path(__file__).resolve().parent / "audio" / "ta" / "cloned_sample_demo.mp3"
+            if cloned_audio_file.exists():
+                with open(cloned_audio_file, "rb") as f:
+                    st.audio(f.read(), format="audio/mp3")
+
         # Quick Tamil Prompt Chips
         st.markdown("#### 💡 Quick Tamil Response Chips")
         chips = [
