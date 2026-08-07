@@ -81,6 +81,21 @@ class ConversationManager:
         }
 
     @staticmethod
+    def process_turn_text(db: Session, session_id: str, text: str, force_language: str = "ta") -> Dict[str, Any]:
+        """Classifies intent from text query and processes turn."""
+        from app.services.intent import IntentClassifier
+        classifier = IntentClassifier()
+        intent_res = classifier.predict(text, language=force_language)
+        return ConversationManager.process_turn(
+            db=db,
+            session_id=session_id,
+            transcription=text,
+            detected_lang=force_language,
+            intent_code=intent_res["intent"],
+            confidence=intent_res["confidence"]
+        )
+
+    @staticmethod
     def process_turn(
         db: Session,
         session_id: str,
