@@ -195,11 +195,39 @@ if nav_choice == "📞 Outbound Call Simulator":
                     st.rerun()
 
     with col2:
-        st.markdown("### 💬 Live Call Transcript & Audio Stream")
+        st.markdown("### 💬 Live Telephonic Conversation & Audio Stream")
         
         if not st.session_state.transcript_history:
             st.info("👈 Select a donor and click 'Initiate Outbound Call' to start the live conversation.")
         else:
+            # 1. Render latest turn Audio Player Banner first for immediate speech playback
+            agent_turns = [t for t in st.session_state.transcript_history if t.get("role") == "agent"]
+            if agent_turns:
+                latest_turn = agent_turns[-1]
+                audio_url = latest_turn.get("audio_url", "")
+                intent_code = str(latest_turn.get("intent", "GREETING")).lower()
+                
+                possible_paths = [
+                    Path(audio_url.lstrip("/")),
+                    Path(__file__).resolve().parent / audio_url.lstrip("/"),
+                    Path(__file__).resolve().parent / "audio" / "ta" / f"{intent_code}.mp3",
+                    Path(__file__).resolve().parent / "audio" / "ta" / f"{intent_code}.aac",
+                    Path(__file__).resolve().parent / "audio" / "ta" / f"{intent_code}.ogg",
+                    Path(__file__).resolve().parent / "audio" / "ta" / "greeting.mp3"
+                ]
+                
+                for p in possible_paths:
+                    if p.exists() and p.is_file():
+                        try:
+                            st.markdown(f"**🔊 Now Playing Agent Response:** `{intent_code.upper()}`")
+                            with open(p, "rb") as f:
+                                st.audio(f.read(), format="audio/mp3", autoplay=True)
+                            break
+                        except Exception as e:
+                            pass
+
+            # 2. Render Full Conversation Transcript History
+            st.markdown("---")
             for turn in st.session_state.transcript_history:
                 if turn["role"] == "customer":
                     st.markdown(f"**👤 Donor:** {turn['text']}")
@@ -209,25 +237,6 @@ if nav_choice == "📞 Outbound Call Simulator":
                     **🤖 AI Call Agent** <span class="badge-intent">{turn['intent']}</span> <span class="badge-conf">Conf: {int(turn['confidence']*100)}%</span> <span style="color:#ef4444; font-weight:bold;">{escalated_tag}</span>  
                     {turn['text']}
                     """, unsafe_allow_html=True)
-                    
-                    audio_url = turn.get("audio_url", "")
-                    intent_code = str(turn.get("intent", "GREETING")).lower()
-                    
-                    possible_paths = [
-                        Path(audio_url.lstrip("/")),
-                        Path(__file__).resolve().parent / audio_url.lstrip("/"),
-                        Path(__file__).resolve().parent / "audio" / "ta" / f"{intent_code}.mp3",
-                        Path(__file__).resolve().parent / "audio" / "ta" / "greeting.mp3"
-                    ]
-                    
-                    for p in possible_paths:
-                        if p.exists() and p.is_file():
-                            try:
-                                with open(p, "rb") as f:
-                                    st.audio(f.read(), format="audio/mp3", autoplay=True)
-                                break
-                            except Exception as e:
-                                pass
 
         # Custom Speech Input Box & Microphone Voice Recorder
         if st.session_state.active_session_id:
