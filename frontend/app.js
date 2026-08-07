@@ -222,8 +222,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             };
 
+            speechRecognition.onspeechend = () => {
+                recordingStatus.textContent = "Processing speech... auto-sending turn";
+                setTimeout(() => { stopRecording(); }, 600);
+            };
+
             speechRecognition.onerror = (err) => {
                 console.log("Web Speech API note:", err.error);
+                if (err.error === "no-speech") {
+                    recordingStatus.textContent = "Listening... Speak in Tamil now";
+                }
             };
 
             try {
@@ -258,7 +266,7 @@ document.addEventListener("DOMContentLoaded", () => {
             mediaRecorder.start();
             isRecording = true;
             micBtn.classList.add("recording");
-            recordingStatus.textContent = "Listening... Speak in Tamil now (Tap to Finish)";
+            recordingStatus.textContent = "Listening... Speak in Tamil now (Auto-sending when finished)";
             drawWaveform(stream);
 
         } catch (err) {
@@ -392,6 +400,12 @@ document.addEventListener("DOMContentLoaded", () => {
         playingIntentBadge.textContent = intentName || "RESPONSE";
         playingConfBadge.textContent = `Conf: ${(conf * 100).toFixed(0)}%`;
         agentAudioPlayer.src = url;
+        agentAudioPlayer.onended = () => {
+            if (activeCallSessionId && !isRecording) {
+                recordingStatus.textContent = "Auto-listening... Speak now in Tamil";
+                setTimeout(() => { startRecording(); }, 400);
+            }
+        };
         agentAudioPlayer.play().catch(e => console.log("Auto-play note:", e));
     }
 
