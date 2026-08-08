@@ -78,8 +78,54 @@ class LLMClassifier:
         Guarantees structured JSON return:
         {"intent": "...", "confidence": 0.0, "needs_clarification": false, "needs_human": false}
         """
-        api_key = os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+        from app.config import HF_TOKEN
         
+        # 1. Try Hugging Face Serverless LLM API (Llama-3.2 / Qwen2.5 / Mistral)
+        if HF_TOKEN:
+            try:
+                import requests
+                prompt = (
+                    f"Classify the following customer transcript into exactly ONE intent code from this list: {self.valid_intents}.\n"
+                    f"Transcript: '{text}'\n\n"
+                    f"Respond ONLY with valid JSON in this format:\n"
+                    f'{{"intent": "INTENT_CODE", "confidence": 0.85, "needs_clarification": false, "needs_human": false}}'
+                )
+                headers = {"Authorization": f"Bearer {HF_TOKEN}", "Content-Type": "application/json"}
+                # Try Llama-3.2-3B-Instruct or Qwen2.5-7B-Instruct
+                for model_name in ["meta-llama/Llama-3.2-3B-Instruct", "Qwen/Qwen2.5-7B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3"]:
+                    try:
+                        resp = requests.post(
+                            "https://api-inference.huggingface.co/v1/chat/completions",
+                            headers=headers,
+                            json={
+                                "model": model_name,
+                                "messages": [{"role": "user", "content": prompt}],
+                                "max_tokens": 120,
+                                "temperature": 0.1
+                            },
+                            timeout=5.0
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            content = data["choices"][0]["message"]["content"].strip()
+                            # Clean markdown backticks if present
+                            if content.startswith("```json"):
+                                content = content[7:]
+                            if content.startswith("```"):
+                                content = content[3:]
+                            if content.endswith("```"):
+                                content = content[:-3]
+                            res_json = json.loads(content.strip())
+                            if isinstance(res_json, dict) and "intent" in res_json:
+                                logger.info(f"HuggingFace Serverless LLM ({model_name}) decoded intent: {res_json.get('intent')}")
+                                return res_json
+                    except Exception as hf_mod_err:
+                        continue
+            except Exception as hf_err:
+                logger.warning(f"HuggingFace LLM API note: {hf_err}")
+
+        # 2. Try OpenAI API if configured
+        api_key = os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
         if api_key and os.getenv("ENABLE_LLM_API", "false").lower() == "true":
             try:
                 import requests
@@ -108,7 +154,7 @@ class LLMClassifier:
             except Exception as ex:
                 logger.warning(f"LLM API call error: {ex}")
 
-        # Fallback structured JSON semantic evaluator when API key is unconfigured
+        # 3. Fallback structured JSON semantic evaluator when API key is unconfigured
         return self._rule_fallback_evaluator(text)
 
     def _rule_fallback_evaluator(self, text: str) -> Dict[str, Any]:
