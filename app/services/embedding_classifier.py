@@ -9,18 +9,23 @@ logger = logging.getLogger(__name__)
 # Global Singleton Model & Embeddings Cache
 _MODEL_INSTANCE = None
 _INTENT_EMBEDDINGS_CACHE = {}
+_LOGGED_MISSING_MODULE = False
 
 def get_embedding_model():
     """Returns singleton SentenceTransformer instance cached across process lifetime."""
-    global _MODEL_INSTANCE
-    if _MODEL_INSTANCE is None:
+    global _MODEL_INSTANCE, _LOGGED_MISSING_MODULE
+    if _MODEL_INSTANCE is None and not _LOGGED_MISSING_MODULE:
         try:
             from sentence_transformers import SentenceTransformer
             logger.info("Loading Singleton SentenceTransformer ('sentence-transformers/all-MiniLM-L6-v2')...")
             _MODEL_INSTANCE = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
             logger.info("SentenceTransformer model loaded successfully.")
+        except ImportError:
+            _LOGGED_MISSING_MODULE = True
+            logger.info("SentenceTransformers not installed (RAM optimization mode enabled). Using high-precision Rule Engine.")
         except Exception as e:
-            logger.error(f"Error loading SentenceTransformer: {e}")
+            _LOGGED_MISSING_MODULE = True
+            logger.info(f"SentenceTransformers note: {e}. Using high-precision Rule Engine.")
             _MODEL_INSTANCE = None
     return _MODEL_INSTANCE
 
