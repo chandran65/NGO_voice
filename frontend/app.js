@@ -30,6 +30,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const waveformCanvas = document.getElementById("waveformCanvas");
     const textQueryInput = document.getElementById("textQueryInput");
     const submitTextBtn = document.getElementById("submitTextBtn");
+    const liveCaptionCard = document.getElementById("liveCaptionCard");
+    const liveCaptionText = document.getElementById("liveCaptionText");
+    const captionLangBadge = document.getElementById("captionLangBadge");
 
     const transcriptBox = document.getElementById("transcriptBox");
     const agentAudioPlayer = document.getElementById("agentAudioPlayer");
@@ -159,6 +162,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         addTranscriptTurn({ role: "customer", text: text });
+        if (liveCaptionText) {
+            liveCaptionText.innerHTML = `💬 <strong>Customer Input:</strong> "${text}"`;
+        }
         textQueryInput.value = "";
 
         try {
@@ -178,6 +184,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- 5. Push-to-Talk Microphone Manager (Web Speech API + MediaRecorder) ---
     let speechRecognition = null;
     let recognizedText = "";
+    let speechTimeoutId = null;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -196,41 +203,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function startRecording() {
         recognizedText = "";
-        const lang = callLanguageSelect.value === "ta" ? "ta-IN" : "en-IN";
+        textQueryInput.value = "";
+        const selectedLang = callLanguageSelect.value;
+        const lang = selectedLang === "ta" ? "ta-IN" : "en-IN";
+
+        if (captionLangBadge) {
+            captionLangBadge.textContent = selectedLang === "ta" ? "Tamil (ta-IN)" : "English (en-IN)";
+        }
+        if (liveCaptionText) {
+            liveCaptionText.innerHTML = `<em>🎙️ Listening... Speak now into your microphone...</em>`;
+        }
 
         // Initialize Web Speech API if supported in browser
         if (SpeechRecognition) {
             speechRecognition = new SpeechRecognition();
-            speechRecognition.continuous = false;
+            speechRecognition.continuous = true;
             speechRecognition.interimResults = true;
             speechRecognition.lang = lang;
 
             speechRecognition.onresult = (event) => {
-                let interim = "";
-                for (let i = event.resultIndex; i < event.results.length; i++) {
+                let finalTranscript = "";
+                let interimTranscript = "";
+                for (let i = 0; i < event.results.length; i++) {
                     const transcript = event.results[i][0].transcript;
                     if (event.results[i].isFinal) {
-                        recognizedText += transcript;
+                        finalTranscript += transcript + " ";
                     } else {
-                        interim += transcript;
+                        interimTranscript += transcript;
                     }
                 }
-                const displayText = recognizedText || interim;
+                const displayText = (finalTranscript + interimTranscript).trim();
                 if (displayText) {
+                    recognizedText = finalTranscript.trim() || displayText;
                     textQueryInput.value = displayText;
-                    recordingStatus.textContent = `Recognized: "${displayText}"`;
+                    if (liveCaptionText) {
+                        liveCaptionText.innerHTML = `<span class="highlight-speech">"${displayText}"</span>`;
+                    }
+                    recordingStatus.innerHTML = `🎙️ <strong style="color: #6366f1;">Speaking:</strong> "${displayText}"`;
                 }
             };
 
             speechRecognition.onspeechend = () => {
-                recordingStatus.textContent = "Processing speech... auto-sending turn";
-                setTimeout(() => { stopRecording(); }, 600);
+                recordingStatus.innerHTML = `🎙️ <strong style="color: #10b981;">Speech captured!</strong> Tap mic or wait to process...`;
+                if (speechTimeoutId) clearTimeout(speechTimeoutId);
+                speechTimeoutId = setTimeout(() => {
+                    if (isRecording) stopRecording();
+                }, 2200);
             };
 
             speechRecognition.onerror = (err) => {
                 console.log("Web Speech API note:", err.error);
                 if (err.error === "no-speech") {
-                    recordingStatus.textContent = "Listening... Speak in Tamil now";
+                    recordingStatus.textContent = "Listening... Speak in Tamil into microphone";
                 }
             };
 
@@ -242,9 +266,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
             audioChunks = [];
-            mediaRecorder = new MediaRecorder(stream);
+            
+            const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") 
+                ? "audio/webm;codecs=opus" 
+                : (MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : (MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : ""));
+            
+            mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 
             mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) audioChunks.push(event.data);
@@ -253,25 +288,32 @@ document.addEventListener("DOMContentLoaded", () => {
             mediaRecorder.onstop = async () => {
                 stream.getTracks().forEach(track => track.stop());
                 
-                if (recognizedText && recognizedText.trim().length > 0) {
-                    sendTextTurn(recognizedText.trim());
-                } else if (audioChunks.length > 0) {
-                    const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+                if (audioChunks.length > 0) {
+                    const blobMime = mediaRecorder.mimeType || "audio/webm";
+                    const audioBlob = new Blob(audioChunks, { type: blobMime });
                     sendVoiceTurn(audioBlob);
                 } else {
-                    recordingStatus.textContent = "Tap microphone to respond in Tamil";
+                    const capturedText = recognizedText ? recognizedText.trim() : textQueryInput.value.trim();
+                    if (capturedText && capturedText.length > 0) {
+                        sendTextTurn(capturedText);
+                    } else {
+                        recordingStatus.textContent = "Tap microphone to respond in Tamil";
+                        if (liveCaptionText) {
+                            liveCaptionText.innerHTML = `Tap microphone below and speak your query...`;
+                        }
+                    }
                 }
             };
 
-            mediaRecorder.start();
+            mediaRecorder.start(100);
             isRecording = true;
             micBtn.classList.add("recording");
-            recordingStatus.textContent = "Listening... Speak in Tamil now (Auto-sending when finished)";
+            recordingStatus.innerHTML = `🎙️ <strong style="color: #6366f1;">Listening...</strong> Speak in Tamil now`;
             drawWaveform(stream);
 
         } catch (err) {
             console.error("Microphone access denied:", err);
-            alert("Could not access microphone.");
+            alert("Could not access microphone. Please allow microphone permissions in your browser address bar.");
         }
     }
 
@@ -279,7 +321,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (isRecording) {
             isRecording = false;
             micBtn.classList.remove("recording");
-            recordingStatus.textContent = "Processing speech turn...";
+            recordingStatus.textContent = "Transcribing & analyzing speech turn...";
+            if (liveCaptionText && textQueryInput.value) {
+                liveCaptionText.innerHTML = `⚡ <em>Analyzing Intent for: "${textQueryInput.value}"...</em>`;
+            }
             
             if (speechRecognition) {
                 try { speechRecognition.stop(); } catch(e) {}
@@ -293,14 +338,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function sendVoiceTurn(audioBlob) {
         try {
+            recordingStatus.textContent = "Transcribing voice via STT engine...";
             const formData = new FormData();
-            formData.append("file", audioBlob, "speech.wav");
+            const ext = audioBlob.type.includes("mp4") ? "mp4" : "webm";
+            formData.append("file", audioBlob, `speech.${ext}`);
             formData.append("session_id", activeCallSessionId);
+            
+            const bText = recognizedText ? recognizedText.trim() : "";
+            if (bText && bText.length > 0) {
+                formData.append("browser_transcription", bText);
+            }
 
             const res = await fetch("/api/v1/outbound/turn-voice", { method: "POST", body: formData });
             const data = await res.json();
 
-            addTranscriptTurn({ role: "customer", text: data.transcription || "[Voice Audio Response]" });
+            const spokenText = (data.transcription && data.transcription.trim().length > 0) 
+                ? data.transcription.trim() 
+                : (bText || "[Voice Input Received]");
+            textQueryInput.value = spokenText;
+            if (liveCaptionText) {
+                liveCaptionText.innerHTML = `💬 <strong>Customer Spoke:</strong> "${spokenText}"`;
+            }
+            addTranscriptTurn({ role: "customer", text: spokenText });
             handleTurnResponse(data);
 
         } catch (err) {
@@ -401,9 +460,11 @@ document.addEventListener("DOMContentLoaded", () => {
         playingConfBadge.textContent = `Conf: ${(conf * 100).toFixed(0)}%`;
         agentAudioPlayer.src = url;
         agentAudioPlayer.onended = () => {
-            if (activeCallSessionId && !isRecording) {
-                recordingStatus.textContent = "Auto-listening... Speak now in Tamil";
-                setTimeout(() => { startRecording(); }, 400);
+            if (activeCallSessionId) {
+                recordingStatus.innerHTML = `🎙️ <strong style="color: #10b981;">Ready!</strong> Tap microphone below to speak your turn...`;
+                if (liveCaptionText) {
+                    liveCaptionText.innerHTML = `<em>Tap microphone button below and speak your query...</em>`;
+                }
             }
         };
         agentAudioPlayer.play().catch(e => console.log("Auto-play note:", e));

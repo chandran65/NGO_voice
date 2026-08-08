@@ -5,11 +5,12 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from app.config import INTENTS_REGISTRY, HIGH_CONFIDENCE_THRESHOLD, CLARIFICATION_THRESHOLD
+from app.config import INTENTS_REGISTRY, HIGH_CONFIDENCE_THRESHOLD, CLARIFICATION_THRESHOLD, MAX_CLARIFICATION_ATTEMPTS
 from app.models import CallSessionModel, CallTurnModel, AgentEscalation, QueryLog, CustomerProfile
 from app.services.backend_api import BackendAPIService
 from app.services.tts_service import DynamicTTSService
 from app.services.audio_retrieval import AudioRetrievalService
+from app.services.normalizer import TextNormalizer
 
 logger = logging.getLogger(__name__)
 
@@ -82,17 +83,18 @@ class ConversationManager:
 
     @staticmethod
     def process_turn_text(db: Session, session_id: str, text: str, force_language: str = "ta") -> Dict[str, Any]:
-        """Classifies intent from text query and processes turn."""
-        from app.services.intent import IntentClassifier
-        classifier = IntentClassifier()
-        intent_res = classifier.predict(text, language=force_language)
+        """Classifies intent from text query using Layered Intent Resolution System."""
+        from app.services.layered_intent_resolver import LayeredIntentResolver
+        resolver = LayeredIntentResolver()
+        intent_res = resolver.resolve(text, language=force_language)
         return ConversationManager.process_turn(
             db=db,
             session_id=session_id,
             transcription=text,
             detected_lang=force_language,
-            intent_code=intent_res["intent"],
-            confidence=intent_res["confidence"]
+            intent_code=intent_res.intent,
+            confidence=intent_res.confidence,
+            intent_result=intent_res
         )
 
     @staticmethod
@@ -102,14 +104,15 @@ class ConversationManager:
         transcription: str,
         detected_lang: str,
         intent_code: str,
-        confidence: float
+        confidence: float,
+        intent_result: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Decision Engine processing for a single conversation turn:
         1. Context & Multi-turn state update
-        2. Escalation triggers (Explicit Agent Request / Complaint / Low Confidence)
-        3. Backend API personalization (Policy, Premium, Payment Link, EMI, Address)
-        4. Audio response selection (Approved Pre-recorded vs Dynamic TTS)
+        2. Escalation triggers (Explicit Agent Request / Complaint / Max Clarification limit)
+        3. Backend API personalization
+        4. Audio response selection
         5. Clarification loop logic
         """
         start_time = time.time()
@@ -137,11 +140,11 @@ class ConversationManager:
         session["turn_count"] += 1
         turn_num = session["turn_count"]
 
+        normalized_text = intent_result.normalized_text if intent_result else TextNormalizer.normalize(transcription, detected_lang)
+
         # Fetch Customer details for Backend API lookups
         customer = BackendAPIService.get_customer_by_phone(db, session["phone"])
         policy_no = customer.get("policy_number")
-        premium_amt = customer.get("premium_amount")
-        due_date = customer.get("due_date")
 
         escalate = False
         escalation_reason = None
@@ -153,7 +156,7 @@ class ConversationManager:
         if intent_code == "AGENT_REQUEST":
             escalate = True
             escalation_reason = "Customer explicitly requested a human agent."
-            response_text = "நிச்சயமாக. உங்கள் அழைப்பை உடனடி வாடிக்கையாளர் உதவி முகவரிடம் மாற்றுகிறேன், தயவுசெய்து காத்திருக்கவும்."
+            response_text = "நிச்சயமாக. உங்கள் அழைப்பை அறக்கட்டளையின் நேரடி அதிகாரியிடம் மாற்றுகிறேன், தயவுசெய்து காத்திருக்கவும்."
             audio_url = "/audio/ta/supervisor_escalation.mp3"
 
         elif intent_code == "COMPLAINT":
@@ -162,76 +165,41 @@ class ConversationManager:
             response_text = "உங்கள் புகாரை நாங்கள் தீவிரமாக எடுத்துக்கொள்கிறோம். உங்கள் அழைப்பை மேலதிகாரியிடம் மாற்றுகிறேன்."
             audio_url = "/audio/ta/supervisor_escalation.mp3"
 
-        elif confidence < CLARIFICATION_THRESHOLD and session["clarification_count"] >= 1:
+        elif (confidence < CLARIFICATION_THRESHOLD or intent_code == "FALLBACK_UNKNOWN") and session["clarification_count"] >= MAX_CLARIFICATION_ATTEMPTS:
             escalate = True
-            escalation_reason = f"Low confidence score ({confidence}) after clarification attempt."
+            escalation_reason = f"Classification ambiguous after maximum clarification attempts ({MAX_CLARIFICATION_ATTEMPTS})."
             response_text = "மன்னிக்கவும். உங்கள் வினவலுக்கு துல்லியமான பதிலளிக்க உங்கள் அழைப்பை எங்கள் வாடிக்கையாளர் முகவரிடம் மாற்றுகிறேன்."
             audio_url = "/audio/ta/supervisor_escalation.mp3"
 
         # --- RULE 2: Clarification Trigger ---
         elif confidence < CLARIFICATION_THRESHOLD or intent_code == "FALLBACK_UNKNOWN":
             session["clarification_count"] += 1
-            response_text = "மன்னிக்கவும், தாங்கள் கூறியதை என்னால் தெளிவாக விளங்கிக்கொள்ள முடியவில்லை. உங்கள் பாலிசி விவரம் அல்லது பிரீமியம் தவணை தொகை பற்றியா?"
+            response_text = "மன்னிக்கவும், தாங்கள் கூறியதை என்னால் தெளிவாக விளங்கிக்கொள்ள முடியவில்லை. எங்கள் குழந்தைகள் இல்லத்தின் நன்கொடை விவரங்கள் அல்லது 80G வரி விலக்கு பற்றியா?"
             rel_path, _ = AudioRetrievalService().get_audio_path("FALLBACK_UNKNOWN", detected_lang)
             audio_url = f"/{rel_path}"
 
-        # --- RULE 3: High Confidence FAQ & Backend API Response Generator ---
+        # --- RULE 3: High Confidence FAQ & Approved Pre-recorded Audio Response ---
         else:
             session["clarification_count"] = 0 # Reset clarification on good match
             
-            if intent_code == "POLICY_ENQUIRY":
-                policy_info = BackendAPIService.get_policy_details(db, policy_no)
-                response_text = f"உங்கள் பாலிசி {policy_info['policy_number']} தற்போது செயலில் உள்ளது. இதற்கான காப்பீட்டுத் தொகை ரூபாய் {int(policy_info['sum_assured']):,}. வருமான வரி விலக்கு சலுகையும் உண்டு."
-                rel_url, _ = DynamicTTSService.generate_tts_audio(response_text, detected_lang)
-                audio_url = f"/{rel_url}"
-                is_tts = True
-
-            elif intent_code == "PREMIUM_DUE":
-                response_text = f"உங்கள் அடுத்த பாலிசி தவணைத் தொகை ரூபாய் {int(premium_amt):,}. செலுத்த வேண்டிய கடைசி தேதி {due_date}."
-                rel_url, _ = DynamicTTSService.generate_tts_audio(response_text, detected_lang)
-                audio_url = f"/{rel_url}"
-                is_tts = True
-
-            elif intent_code == "PAYMENT_LINK":
-                link = BackendAPIService.generate_payment_link(session["phone"], policy_no, premium_amt)
-                response_text = f"உங்கள் மொபைல் எண்ணிற்கு ஆன்லைனில் கட்டணம் செலுத்த SMS மூலம் லிங்க் அனுப்பியுள்ளேன். UPI அல்லது கார்டு மூலம் உடனடியாக செலுத்தலாம்."
-                rel_url, _ = DynamicTTSService.generate_tts_audio(response_text, detected_lang)
-                audio_url = f"/{rel_url}"
-                is_tts = True
-
-            elif intent_code == "EMI_OPTIONS":
-                emi = BackendAPIService.calculate_emi_options(premium_amt)
-                response_text = f"உங்கள் பிரீமியம் தொகையை மாதம் ரூபாய் {int(emi['monthly_emi']):,} என்ற எளிய மாத தவணையாக (EMI) மாற்றி செலுத்தலாம்."
-                rel_url, _ = DynamicTTSService.generate_tts_audio(response_text, detected_lang)
-                audio_url = f"/{rel_url}"
-                is_tts = True
-
-            elif intent_code == "ADDRESS_UPDATE":
-                response_text = "உங்கள் முகவரி மாற்றக் கோரிக்கை பதிவு செய்யப்பட்டது. சரிபார்ப்பிற்காக SMS மூலம் விபரக் படிவம் அனுப்பப்பட்டுள்ளது."
-                rel_url, _ = AudioRetrievalService().get_audio_path("ADDRESS_UPDATE", detected_lang)
-                audio_url = f"/{rel_url}"
-
-            elif intent_code == "CALLBACK_REQUEST":
-                response_text = "சரி, உங்கள் அழைப்புக் கோரிக்கை பதிவு செய்யப்பட்டது. எங்கள் மேலாளர் உங்களுக்கு வசதியான நேரத்தில் தொடர்புகொள்வார்."
-                rel_url, _ = AudioRetrievalService().get_audio_path("CALLBACK_REQUEST", detected_lang)
-                audio_url = f"/{rel_url}"
-
-            elif intent_code in INTENTS_REGISTRY:
+            if intent_code in INTENTS_REGISTRY:
                 intent_info = INTENTS_REGISTRY[intent_code]
                 response_text = intent_info.get("chunk_ta") if detected_lang == "ta" else intent_info.get("chunk_en")
                 rel_path, _ = AudioRetrievalService().get_audio_path(intent_code, detected_lang)
                 audio_url = f"/{rel_path}"
-
             else:
                 response_text = "உங்கள் வினவல் பதிவு செய்யப்பட்டது."
-                audio_url = "/audio/ta/greeting.mp3"
+                rel_path, _ = AudioRetrievalService().get_audio_path("GREETING", detected_lang)
+                audio_url = f"/{rel_path}"
 
         # Update Session History
         turn_entry = {
             "turn": turn_num,
             "customer_speech": transcription,
+            "normalized_text": normalized_text,
             "intent": intent_code,
             "confidence": confidence,
+            "method": intent_result.method if intent_result else "legacy",
             "response_text": response_text,
             "escalated": escalate
         }
@@ -242,8 +210,13 @@ class ConversationManager:
             session["escalated"] = True
             session["status"] = "ESCALATED"
             
-            # Format transcript history summary
-            conv_summary = f"Customer Query: '{transcription}'. Identified Intent: {intent_code} (Conf: {confidence}). Escalation Reason: {escalation_reason}."
+            # Format transcript history summary including normalized transcript & classification attempts
+            attempts_count = len(session["history"])
+            conv_summary = (
+                f"Session: {session_id} | Customer: '{transcription}' | Normalized: '{normalized_text}' | "
+                f"Intent: {intent_code} (Conf: {confidence}) | Classification Attempts: {attempts_count} | "
+                f"Reason: {escalation_reason}"
+            )
             past_responses = " | ".join([t["response_text"] for t in session["history"]])
 
             escalation_ticket = AgentEscalation(

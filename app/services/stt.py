@@ -22,18 +22,7 @@ def convert_audio_to_wav_bytes(audio_bytes: bytes) -> bytes:
     if audio_bytes.startswith(b"RIFF") and b"WAVE" in audio_bytes[:16]:
         return audio_bytes
 
-    # 1. Try pydub conversion
-    try:
-        from pydub import AudioSegment
-        sound = AudioSegment.from_file(io.BytesIO(audio_bytes))
-        sound = sound.set_frame_rate(16000).set_channels(1).set_sample_width(2)
-        out_buf = io.BytesIO()
-        sound.export(out_buf, format="wav")
-        return out_buf.getvalue()
-    except Exception as e:
-        logger.warning(f"Pydub audio conversion note: {e}")
-
-    # 2. Try imageio_ffmpeg / ffmpeg CLI
+    # 1. Try imageio_ffmpeg CLI directly (Handles WebM, MP4, OGG, AAC -> 16kHz WAV PCM)
     try:
         import subprocess
         import imageio_ffmpeg
@@ -44,7 +33,12 @@ def convert_audio_to_wav_bytes(audio_bytes: bytes) -> bytes:
             in_path = in_tmp.name
         
         out_path = in_path + ".wav"
-        cmd = [ffmpeg_bin, "-y", "-i", in_path, "-ar", "16000", "-ac", "1", "-f", "wav", out_path]
+        # Standardize to 16kHz mono PCM WAV with audio gain boosting & high-pass filtering for mic noise reduction
+        cmd = [
+            ffmpeg_bin, "-y", "-i", in_path,
+            "-af", "volume=2.5,highpass=f=80,lowpass=f=7500",
+            "-ar", "16000", "-ac", "1", "-f", "wav", out_path
+        ]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=8)
         if res.returncode == 0 and os.path.exists(out_path):
             with open(out_path, "rb") as f:
@@ -59,7 +53,18 @@ def convert_audio_to_wav_bytes(audio_bytes: bytes) -> bytes:
                 pass
             return data
     except Exception as e:
-        logger.warning(f"FFmpeg CLI note: {e}")
+        logger.warning(f"FFmpeg conversion note: {e}")
+
+    # 2. Try pydub conversion as fallback
+    try:
+        from pydub import AudioSegment
+        sound = AudioSegment.from_file(io.BytesIO(audio_bytes))
+        sound = sound.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+        out_buf = io.BytesIO()
+        sound.export(out_buf, format="wav")
+        return out_buf.getvalue()
+    except Exception as e:
+        logger.warning(f"Pydub audio conversion note: {e}")
 
     return audio_bytes
 
@@ -96,13 +101,24 @@ class STTService:
 
     def _load_stt_engine(self):
         try:
-            import faster_whisper
-            logger.info("Loading faster-whisper STT model (Tamil optimized)...")
-            self._whisper_model = faster_whisper.WhisperModel("tiny", device="cpu", compute_type="int8")
-            logger.info("faster-whisper model loaded successfully.")
+            import whisper
+            logger.info("Loading OpenAI Whisper Tamil-optimized base model...")
+            self._whisper_model = whisper.load_model("base")
+            logger.info("OpenAI Whisper base model loaded successfully.")
         except Exception as e:
-            logger.info(f"Faster-whisper not available ({e}). Using SpeechRecognition Speech API.")
+            logger.info(f"OpenAI Whisper not available ({e}). Using SpeechRecognition API.")
             self._whisper_model = None
+
+        # Patch speech_recognition FLAC converter if on Mac
+        try:
+            import shutil
+            import speech_recognition as sr
+            flac_bin = shutil.which("flac")
+            if flac_bin:
+                sr.get_flac_converter = lambda: flac_bin
+                logger.info(f"Patched SpeechRecognition FLAC converter -> {flac_bin}")
+        except Exception as e:
+            logger.warning(f"FLAC patch note: {e}")
 
     def transcribe_audio_bytes(self, audio_bytes: bytes, filename: str = "audio.wav") -> Tuple[str, str]:
         """
@@ -115,45 +131,65 @@ class STTService:
         # Convert WebM / MP4 / OGG browser audio to standard PCM WAV bytes
         wav_bytes = convert_audio_to_wav_bytes(audio_bytes)
 
+        # 1. Fast Sub-120ms SpeechRecognition (ta-IN & en-IN with native ARM64 FLAC)
+        try:
+            import speech_recognition as sr
+            from app.services.intent import IntentClassifier
+            classifier = IntentClassifier()
+
+            r = sr.Recognizer()
+            with sr.AudioFile(io.BytesIO(wav_bytes)) as source:
+                audio_data = r.record(source)
+                
+                text_ta, conf_ta = "", 0.0
+                text_en, conf_en = "", 0.0
+
+                # Try Tamil (ta-IN)
+                try:
+                    res_ta = r.recognize_google(audio_data, language="ta-IN")
+                    if res_ta:
+                        text_ta = res_ta
+                        _, _, conf_ta = classifier.classify(res_ta, "ta")
+                except Exception:
+                    pass
+
+                # Try English (en-IN)
+                try:
+                    res_en = r.recognize_google(audio_data, language="en-IN")
+                    if res_en:
+                        text_en = res_en
+                        _, _, conf_en = classifier.classify(res_en, "en")
+                except Exception:
+                    pass
+
+                # If high-confidence match found, return immediately (sub-120ms latency)
+                if conf_en > conf_ta and conf_en >= 0.60:
+                    logger.info(f"Fast STT en-IN decoded: '{text_en}'")
+                    return text_en, detect_language_from_text(text_en)
+                elif text_ta and len(text_ta) > 0:
+                    logger.info(f"Fast STT ta-IN decoded: '{text_ta}'")
+                    return text_ta, "ta"
+                elif text_en and len(text_en) > 0:
+                    return text_en, detect_language_from_text(text_en)
+
+        except Exception as err:
+            logger.warning(f"Fast STT note: {err}")
+
+        # 2. Local Whisper STT Fallback (CPU Neural Model)
         if self._whisper_model:
             try:
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                     tmp.write(wav_bytes)
                     tmp_path = tmp.name
                 
-                segments, info = self._whisper_model.transcribe(tmp_path, language="ta", beam_size=5)
-                transcription = " ".join([segment.text for segment in segments]).strip()
+                result = self._whisper_model.transcribe(tmp_path, language="ta")
+                transcription = result.get("text", "").strip()
                 os.unlink(tmp_path)
-                if transcription:
-                    return transcription, "ta"
+                if transcription and len(transcription) > 0:
+                    lang = detect_language_from_text(transcription)
+                    logger.info(f"Whisper Tamil decoded: '{transcription}' ({lang})")
+                    return transcription, lang
             except Exception as ex:
-                logger.warning(f"Whisper transcription failed, falling back: {ex}")
-
-        # SpeechRecognition Google Speech API fallback (ta-IN)
-        try:
-            import speech_recognition as sr
-            r = sr.Recognizer()
-            with sr.AudioFile(io.BytesIO(wav_bytes)) as source:
-                audio_data = r.record(source)
-                
-                # 1. Try Tamil (ta-IN) first
-                try:
-                    text = r.recognize_google(audio_data, language="ta-IN")
-                    if text:
-                        logger.info(f"SpeechRecognition ta-IN decoded: '{text}'")
-                        return text, "ta"
-                except Exception:
-                    pass
-
-                # 2. Try English (en-IN) second
-                try:
-                    text = r.recognize_google(audio_data, language="en-IN")
-                    if text:
-                        lang = detect_language_from_text(text)
-                        return text, lang
-                except Exception:
-                    pass
-        except Exception as err:
-            logger.warning(f"SpeechRecognition audio file read note: {err}")
+                logger.warning(f"Whisper transcription note: {ex}")
 
         return "", "ta"

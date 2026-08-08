@@ -8,13 +8,11 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-from app.config import PROJECT_ROOT
+from app.config import BASE_DIR
 
 AUDIO_DIRS = [
-    PROJECT_ROOT / "audio" / "ta",
-    PROJECT_ROOT / "audio" / "en",
-    PROJECT_ROOT / "voice_fundraiser_poc" / "audio" / "ta",
-    PROJECT_ROOT / "voice_fundraiser_poc" / "audio" / "en"
+    BASE_DIR / "audio" / "ta",
+    BASE_DIR / "audio" / "en"
 ]
 
 def generate_number_source_audio():

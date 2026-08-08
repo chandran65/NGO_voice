@@ -96,23 +96,30 @@ async def start_outbound_call_session(
 async def process_outbound_turn_voice(
     file: UploadFile = File(...),
     session_id: str = Form("CALL-DEMO"),
+    browser_transcription: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
     Outbound Voice Handler:
-    1. Transcribes customer spoken Tamil audio using Whisper STT.
+    1. Transcribes customer spoken Tamil audio using Dual STT (Server + Browser fallback).
     2. Classifies intent & sentiment.
     3. Evaluates Decision Engine (FAQ, Backend API lookup, Clarification, or Escalation).
-    4. Generates dynamic Tamil TTS or selects approved pre-recorded MP3 response.
+    4. Generates Hugging Face Piper Tamil TTS or selects approved pre-recorded MP3 response.
     """
     try:
         audio_bytes = await file.read()
         if not audio_bytes:
             raise HTTPException(status_code=400, detail="Empty voice audio payload.")
 
-        # Transcribe Tamil speech
-        transcription, lang_code = stt_service.transcribe_audio_bytes(audio_bytes, file.filename or "customer_input.wav")
-        
+        # Zero-latency Real-time Speech-to-Text resolution
+        if browser_transcription and len(browser_transcription.strip()) > 0:
+            transcription = browser_transcription.strip()
+            lang_code = detect_language_from_text(transcription)
+            logger.info(f"Zero-latency STT active: '{transcription}' ({lang_code})")
+        else:
+            # Fallback to server-side audio transcription
+            transcription, lang_code = stt_service.transcribe_audio_bytes(audio_bytes, file.filename or "customer_input.wav")
+
         # Intent classification
         intent_code, detected_lang, confidence = intent_classifier.classify(transcription, lang_code)
         

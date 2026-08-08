@@ -34,30 +34,42 @@ def generate_all_audio_files():
         chunk_ta = info.get("chunk_ta")
         chunk_en = info.get("chunk_en")
 
-        # 1. Tamil Audio Generation
+        # 1. Tamil Audio Generation (Edge Studio HD Female Voice & Piper Neural Fallback)
         if chunk_ta:
             try:
-                tts_ta = gTTS(text=chunk_ta, lang="ta", slow=False)
+                import asyncio, edge_tts
                 for tdir in target_dirs:
                     lang_dir = tdir / "ta"
                     lang_dir.mkdir(parents=True, exist_ok=True)
                     out_path = lang_dir / filename
-                    tts_ta.save(str(out_path))
-                print(f"Generated Tamil Audio [gTTS] => ta/{filename}")
+                    async def save_edge():
+                        comm = edge_tts.Communicate(chunk_ta, "ta-IN-PallaviNeural")
+                        await comm.save(str(out_path))
+                    asyncio.run(save_edge())
+                    print(f"Generated Female HD Tamil Audio [ta-IN-PallaviNeural] => ta/{filename}")
                 count += 1
             except Exception as e:
-                print(f"Error generating Tamil audio for {code}: {e}")
+                print(f"Edge TTS fallback note for {code}: {e}")
+                from app.services.tts_service import DynamicTTSService
+                for tdir in target_dirs:
+                    lang_dir = tdir / "ta"
+                    lang_dir.mkdir(parents=True, exist_ok=True)
+                    out_path = lang_dir / filename
+                    DynamicTTSService.generate_piper_tamil_tts(chunk_ta, out_path, voice="HemaLatha")
 
         # 2. English Audio Generation
         if chunk_en:
             try:
-                tts_en = gTTS(text=chunk_en, lang="en", slow=False)
                 for tdir in target_dirs:
                     lang_dir = tdir / "en"
                     lang_dir.mkdir(parents=True, exist_ok=True)
                     out_path = lang_dir / filename
-                    tts_en.save(str(out_path))
-                    print(f"Generated English Audio [gTTS] => {lang_dir.name}/{filename}")
+                    if not out_path.exists() or out_path.stat().st_size == 0:
+                        tts_en = gTTS(text=chunk_en, lang="en", slow=False)
+                        tts_en.save(str(out_path))
+                        print(f"Generated English Audio [gTTS] => en/{filename}")
+                    else:
+                        print(f"Verified English Audio => en/{filename}")
             except Exception as e:
                 print(f"Error generating English audio for {code}: {e}")
 

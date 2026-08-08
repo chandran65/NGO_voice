@@ -374,6 +374,60 @@ body {
     padding: 18px;
 }
 
+/* Real-Time Live Speech Caption Card */
+.live-caption-card {
+    background: linear-gradient(135deg, rgba(30, 27, 75, 0.85), rgba(15, 23, 42, 0.9));
+    border: 2px solid #6366f1;
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    margin: 14px 0;
+    box-shadow: 0 0 25px rgba(99, 102, 241, 0.35);
+    transition: all 0.2s ease-in-out;
+}
+
+.caption-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.live-pulse {
+    color: #ef4444;
+    letter-spacing: 1px;
+    animation: pulseGlow 1.2s infinite alternate;
+}
+
+@keyframes pulseGlow {
+    from { opacity: 0.6; text-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+    to { opacity: 1.0; text-shadow: 0 0 16px rgba(239, 68, 68, 1.0); }
+}
+
+.caption-lang-badge {
+    background: rgba(99, 102, 241, 0.25);
+    color: #a5b4fc;
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+.live-caption-text {
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.5;
+    min-height: 32px;
+    word-break: break-word;
+}
+
+.highlight-speech {
+    color: #38bdf8;
+    font-weight: 800;
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+
 .call-timer-box {
     display: flex;
     align-items: center;
@@ -733,4 +787,50 @@ body {
     border-top: 1px solid var(--card-border);
     font-size: 12px;
     color: var(--text-dim);
+}
+
+/* Vapi / LiveKit Sandbox Styles */
+.vapi-title {
+    font-size: 20px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.vapi-badge {
+    background: linear-gradient(135deg, #6366f1, #a855f7) !important;
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.4) !important;
+}
+
+.vapi-pill {
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    color: #818cf8;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+}
+
+.telemetry-pill {
+    background: rgba(15, 23, 42, 0.8) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    font-size: 11px !important;
+    color: #94a3b8 !important;
+}
+
+.telemetry-pill strong {
+    color: #38bdf8;
+}
+
+.dot.pulse {
+    animation: pulseGlow 1.5s infinite ease-in-out;
+}
+
+@keyframes pulseGlow {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }

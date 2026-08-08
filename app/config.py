@@ -6,12 +6,8 @@ from typing import Dict, List, Any
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BASE_DIR.parent
 
-# Check for primary user audio folder at D:\DSM Project\audio first
-EXTERNAL_AUDIO_DIR = PROJECT_ROOT / "audio"
-if EXTERNAL_AUDIO_DIR.exists() and EXTERNAL_AUDIO_DIR.is_dir():
-    AUDIO_DIR = EXTERNAL_AUDIO_DIR
-else:
-    AUDIO_DIR = BASE_DIR / "audio"
+# Primary user audio folder
+AUDIO_DIR = BASE_DIR / "audio"
 
 DB_PATH = BASE_DIR / "voice_fundraiser.db"
 
@@ -21,7 +17,12 @@ SUPPORTED_LANGUAGES = {
     "en": "English"
 }
 
-# Confidence Thresholds
+# Configurable Intent Classification Thresholds
+RULE_THRESHOLD = float(os.getenv("RULE_THRESHOLD", "0.85"))
+EMBEDDING_THRESHOLD = float(os.getenv("EMBEDDING_THRESHOLD", "0.55"))
+LLM_THRESHOLD = float(os.getenv("LLM_THRESHOLD", "0.65"))
+MAX_CLARIFICATION_ATTEMPTS = int(os.getenv("MAX_CLARIFICATION_ATTEMPTS", "2"))
+
 HIGH_CONFIDENCE_THRESHOLD = 0.70
 CLARIFICATION_THRESHOLD = 0.50
 
@@ -56,7 +57,9 @@ INTENTS_REGISTRY: Dict[str, Dict[str, Any]] = {
         ],
         "phrases_ta": [
             "நன்கொடை பணம்", "பணம் எப்படி பயன்படும்", "எதுக்கு செலவு", "நன்கொடை செலவு", "பயன்பாடு",
-            "பணம் என்ன ஆகும்", "நன்கொடை எவ்வாறு பயன்படுத்தப்படுகிறது", "பணம் செலவழிக்கிறீர்கள்", "பணம் எப்படி செலவு பண்றீங்க"
+            "பணம் என்ன ஆகும்", "நன்கொடை எவ்வாறு பயன்படுத்தப்படுகிறது", "பணம் செலவழிக்கிறீர்கள்", "பணம் எப்படி செலவு பண்றீங்க",
+            "எதுக்காக யூஸ் ஆகுது", "நன்கொடை எதுக்காக யூஸ் ஆகுது", "எதுக்கு யூஸ் ஆகுது", "யூஸ் ஆகுது", "எதுக்கு பயன்படுது",
+            "இந்த நன்கொடை எதுக்காக", "நன்கொடை எதுக்கு", "எதுக்காக நன்கொடை", "இந்த நன்கொடை எதுக்காக யூஸ் ஆகுது"
         ]
     },
     "TAX_BENEFITS": {
@@ -92,7 +95,9 @@ INTENTS_REGISTRY: Dict[str, Dict[str, Any]] = {
             "லிங்க் அனுப்புங்க", "ஆன்லைன்ல செலுத்தணும்", "எஸ்எம்எஸ் லிங்க் அனுப்புங்க", "ஜிபே லிங்க்", "ஜிபி லிங்க்",
             "வாட்ஸ்அப் லிங்க்", "பேமெண்ட் லிங்க்", "எப்படி ஆன்லைன்ல நன்கொடை தர்றது", "லிங்க் வருமா",
             "உங்களுக்கு அமௌன்ட் எப்படி அனுப்புறது ஜிபி லிங்க் அனுப்புறீங்க", "அமௌன்ட் எப்படி அனுப்புறது",
-            "ஜிபி லிங்க் அனுப்புறீங்க", "ஜிபி லிங்க் அனுப்புங்க", "பணம் எப்படி அனுப்புறது", "ஜிபே லிங்க் அனுப்புங்க"
+            "ஜிபி லிங்க் அனுப்புறீங்க", "ஜிபி லிங்க் அனுப்புங்க", "பணம் எப்படி அனுப்புறது", "ஜிபே லிங்க் அனுப்புங்க",
+            "பேமெண்ட் எப்படி பண்றது", "பேமெண்ட் எப்படி பண்றதுன்னு கேட்டேன்", "எப்படி பேமெண்ட் பண்றது",
+            "பணம் எப்படி செலுத்துவது", "நன்கொடை எப்படி செலுத்துவது", "எப்படி பணம் அனுப்புறது", "பேமெண்ட் செய்யணும்"
         ]
     },
     "SPONSOR_CHILD": {
@@ -143,7 +148,8 @@ INTENTS_REGISTRY: Dict[str, Dict[str, Any]] = {
         ],
         "phrases_ta": [
             "அப்புறம் கூப்பிடுங்க", "இப்போ பிஸியா இருக்கேன்", "நாளைக்கு கால் பண்ணுங்க", "சாயங்காலம் கூப்பிடுங்க",
-            "வேற டைம்ல பேசுங்க", "அப்புறம் பேசுறேன்", "கால் பேக் பண்ணுங்க"
+            "வேற டைம்ல பேசுங்க", "அப்புறம் பேசுறேன்", "கால் பேக் பண்ணுங்க", "நான் இப்ப பிசியா இருக்கேன் அப்புறம் கால் பண்ணுங்க",
+            "பிசியா இருக்கேன் அப்புறம் கால் பண்ணுங்க", "இப்ப பிஸியா இருக்கேன்", "அப்புறம் கால் பண்ணுங்க", "பிஸியா இருக்கேன்"
         ]
     },
     "RECEIPT_REQUEST": {
@@ -187,12 +193,18 @@ INTENTS_REGISTRY: Dict[str, Dict[str, Any]] = {
         "chunk_ta": "நிச்சயமாக. உங்கள் அழைப்பை அறக்கட்டளையின் நேரடி அதிகாரியிடம் மாற்றுகிறேன், தயவுசெய்து காத்திருக்கவும்.",
         "chunk_en": "Certainly. Transferring your call directly to a live fundraising representative. Please stay on the line.",
         "phrases_en": [
-            "talk to human agent", "connect to representative", "speak to manager", "transfer call",
-            "human support", "ngo officer", "connect me to person"
+            "speak to human officer", "human officer", "speak with human officer", "talk to human officer",
+            "speak to officer", "talk to officer", "officer", "talk to human agent", "connect to representative",
+            "speak to manager", "transfer call", "human support", "ngo officer", "connect me to person",
+            "how do i trust you", "how can i trust", "is this genuine", "is this real"
         ],
         "phrases_ta": [
-            "மனித முகவரிடம் பேச வேண்டும்", "ஆளு கிட்ட பேசணும்", "ஏஜென்ட் கிட்ட மாத்துங்க", "அதிகாரி கிட்ட பேசுறேன்",
-            "ஹியூமன் சப்போர்ட்", "ஆபிசர் கிட்ட மாத்துங்க", "பிரதிநிதி கூட பேசணும்", "நேரடியா பேசணும்", "நேரடியா ஏஜென்ட் கூட பேசுறேன்", "ஏஜென்ட் கூட பேசுறேன்"
+            "மனித அதிகாரியிடம் பேச வேண்டும்", "அதிகாரியிடம் பேச வேண்டும்", "மனித அதிகாரி", "ஹியூமன் ஆபிசர்",
+            "அதிகாரி கூட பேசணும்", "அதிகாரி கிட்ட பேசுறேன்", "மனித முகவரிடம் பேச வேண்டும்", "ஆளு கிட்ட பேசணும்",
+            "ஏஜென்ட் கிட்ட மாத்துங்க", "ஹியூமன் சப்போர்ட்", "ஆபிசர் கிட்ட மாத்துங்க", "பிரதிநிதி கூட பேசணும்",
+            "நேரடியா பேசணும்", "நேரடியா ஏஜென்ட் கூட பேசுறேன்", "ஏஜென்ட் கூட பேசுறேன்",
+            "எப்படி உங்களை நம்புவது", "நான் எப்படி உங்களை நம்புவது", "எப்படி நம்புறது", "உங்களை எப்படி நம்பறது",
+            "எப்படி நம்புறது உங்களை", "நிஜமா பேசுறீங்களா"
         ]
     },
     "ABOUT_HOME": {
@@ -201,7 +213,7 @@ INTENTS_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description_en": "Information about the children's shelter, elders, and foundation history.",
         "description_ta": "குழந்தைகள் மற்றும் முதியவர்கள் இல்லம் பற்றிய தகவல்கள்.",
         "file_name": "about_home.mp3",
-        "chunk_ta": "எங்கள் அறக்கட்டளை 2012 முதல் 200-க்கும் மேற்பட்ட ஆதரவற்ற குழந்தைகளுக்கு உணவு, கல்வி மற்றும் தங்குமிடம் வழங்கி வருகிறது.",
+        "chunk_ta": "எங்கள் அறக்கட்டளை 2012 முதல் 200க்கும் மேற்பட்ட ஆதரவற்ற குழந்தைகளுக்கு உணவு, கல்வி மற்றும் தங்குமிடம் வழங்கி வருகிறது.",
         "chunk_en": "Our foundation has been providing shelter, education, and nutrition to over 200 children since 2012.",
         "phrases_en": [
             "about organization", "about home", "children shelter", "who are you", "what do you do",
@@ -209,7 +221,9 @@ INTENTS_REGISTRY: Dict[str, Dict[str, Any]] = {
         ],
         "phrases_ta": [
             "இல்லம் பற்றி", "அறக்கட்டளை பற்றி", "அறக்கட்டளை பத்தி", "உங்களோட அறக்கட்டளை பத்தி சொல்லுங்க", "உங்க இல்லத்தை பற்றி சொல்லுங்க", "இல்லத்தை பற்றி சொல்லுங்க",
-            "உங்களைப் பத்தி", "யார் நீங்கள்", "என்ன பண்றீங்க", "குழந்தைகள் இல்லம்", "அறக்கட்டளை விவரம்"
+            "உங்களைப் பத்தி", "யார் நீங்கள்", "என்ன பண்றீங்க", "குழந்தைகள் இல்லம்", "அறக்கட்டளை விவரம்",
+            "சொல்லுங்க என்ன வேணும் உங்களுக்கு", "சொல்லுங்க என்ன வேணும்", "என்ன வேணும்", "எதுக்கு கூப்பிட்டீங்க", "என்ன விஷயம்", "சொல்லுங்க",
+            "மேற்கொண்டு விவரங்கள்", "கூடுதல் விவரங்கள்", "விவரங்கள் வேண்டும்", "மேலும் விவரங்கள்", "விவரம் வேண்டுகிறேன்", "விவரங்கள் வேண்டுமே", "மேலும் விவரங்களை"
         ]
     },
     "NUMBER_SOURCE": {
@@ -221,10 +235,15 @@ INTENTS_REGISTRY: Dict[str, Dict[str, Any]] = {
         "chunk_ta": "எங்கள் அறக்கட்டளையின் பொது நன்கொடையாளர்கள் மற்றும் ஆதரவாளர்கள் பட்டியலிலிருந்து உங்கள் தொடர்பு எண் பெறப்பட்டது.",
         "chunk_en": "Your contact number was retrieved from our registered donor directory.",
         "phrases_en": [
-            "how did you get my number", "where did you get my number", "who gave you my number"
+            "how did you get my number", "where did you get my number", "who gave you my number",
+            "how you got my number", "how di you get my number", "how get my number",
+            "where you got my number", "how did you get my contact number", "where did you get my phone number",
+            "donor number", "how did you get number", "donor", "my number", "got my number"
         ],
         "phrases_ta": [
-            "என் நம்பர் எப்படி கிடைச்சது", "என் போன் நம்பர் எப்படி வந்தது", "எங்க இருந்து நம்பர் எடுத்தீங்க", "நம்பர் யாரு கொடுத்தா"
+            "என் நம்பர் எப்படி கிடைச்சது", "என் போன் நம்பர் எப்படி வந்தது", "எங்க இருந்து நம்பர் எடுத்தீங்க",
+            "நம்பர் யாரு கொடுத்தா", "எப்படி நம்பர் கிடைச்சது", "என் நம்பர் யாரு கொடுத்தாங்க",
+            "டானர்", "நம்பர்", "போன் நம்பர்", "என் தொடர்பு எண்"
         ]
     },
     "SUPERVISOR_ESCALATION": {
@@ -243,8 +262,8 @@ INTENTS_REGISTRY: Dict[str, Dict[str, Any]] = {
         "name": "Ambiguous / General Fallback",
         "description_en": "Played when intent is unclear or confidence is low.",
         "description_ta": "தெளிவில்லாத அல்லது வரையறுக்கப்படாத கேள்விகளுக்கான பொதுவான பதில்.",
-        "file_name": "supervisor_escalation.mp3",
-        "chunk_ta": "மன்னிக்கவும், தாங்கள் கூறியதை என்னால் சரியாக விளங்கிக்கொள்ள முடியவில்லை. தெளிவுபடுத்த ஒரு முறை கூற முடியுமா?",
+        "file_name": "fallback_unknown.mp3",
+        "chunk_ta": "மன்னிக்கவும், தாங்கள் கூறியதை என்னால் தெளிவாக விளங்கிக்கொள்ள முடியவில்லை. எங்கள் குழந்தைகள் இல்லத்தின் நன்கொடை விவரங்கள் அல்லது 80G வரி விலக்கு பற்றியா?",
         "chunk_en": "Apologies, I couldn't understand that clearly. Could you please clarify your request?",
         "phrases_en": [],
         "phrases_ta": []

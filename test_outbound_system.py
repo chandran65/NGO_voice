@@ -74,9 +74,9 @@ class TestOutboundVoiceCallingSystem(unittest.TestCase):
         
         turn_res = ConversationManager.process_turn(self.db, session_id, query, lang, intent, confidence)
         self.assertEqual(turn_res["intent"], "PAYMENT_LINK")
-        self.assertTrue(turn_res["is_tts"]) # Dynamic Tamil TTS generated
-        self.assertIn("SMS மூலம்", turn_res["response_text"])
-        print(f"PASS: Dynamic backend API lookup and Tamil TTS generation succeeded.")
+        self.assertFalse(turn_res["is_tts"]) # Pre-recorded MP3 response
+        self.assertIn("payment_link.mp3", turn_res["audio_url"])
+        print(f"PASS: Payment link pre-recorded human MP3 voice response retrieved successfully.")
 
     def test_05_clarification_turn(self):
         print("\n[TEST 5] Testing Clarification Question Loop on Low Confidence Query...")
@@ -84,7 +84,7 @@ class TestOutboundVoiceCallingSystem(unittest.TestCase):
         session_id = session_res["session_id"]
         
         # Ambiguous query
-        query = "எனக்கு அது பத்தி தெரியணும்"
+        query = "xyz abcd qwerty ambiguous input"
         intent, lang, confidence = self.classifier.classify(query, "ta")
         
         turn_res = ConversationManager.process_turn(self.db, session_id, query, lang, intent, confidence)

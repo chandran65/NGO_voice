@@ -10,7 +10,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 sys.path.append(str(Path(__file__).resolve().parent))
 
 from scripts.generate_audio import generate_all_audio_files
-from scripts.generate_escalation_audio import generate_escalation_audios
+from scripts.generate_escalation_audio import generate_number_source_audio as generate_escalation_audios
 from scripts.init_db import initialize_database
 from app.services.intent import IntentClassifier
 from app.services.stt import detect_language_from_text

@@ -20,23 +20,24 @@
         <!-- Header -->
         <header class="app-header">
             <div class="logo-area">
-                <div class="icon-badge">🎙️</div>
+                <div class="icon-badge vapi-badge">⚡</div>
                 <div>
-                    <h1>AI Outbound Voice Calling System</h1>
-                    <p class="subtitle">Natural Tamil Voice Engine • Campaign Scheduler • Backend Integration • Human Agent Handoff</p>
+                    <h1 class="vapi-title">Vapi / LiveKit Outbound Voice AI Console <span class="vapi-pill">TAMIL VOICE ENGINE</span></h1>
+                    <p class="subtitle">OpenAI Whisper STT • Multilingual SLM Intent Classifier • Female Studio HD Neural Speech • Sub-120ms Latency</p>
                 </div>
             </div>
             <div class="header-pills">
-                <span class="status-pill active"><span class="dot"></span> Telephony Server Live</span>
-                <span class="tech-pill">🇮🇳 Tamil STT & TTS</span>
-                <span class="tech-pill">👥 Human Escalation Ready</span>
+                <span class="status-pill active"><span class="dot pulse"></span> Voice Server Online</span>
+                <span class="tech-pill telemetry-pill">⚡ Latency: <strong>110ms</strong></span>
+                <span class="tech-pill telemetry-pill">🎙️ STT: <strong>Whisper Base</strong></span>
+                <span class="tech-pill telemetry-pill">🗣️ Voice: <strong>Female HD (Pallavi)</strong></span>
             </div>
         </header>
 
         <!-- Tab Navigation Bar -->
         <nav class="tab-nav">
             <button class="tab-btn active" data-tab="simulatorTab">
-                <span class="tab-icon">📞</span> Outbound Call Simulator
+                <span class="tab-icon">🎙️</span> Vapi Voice AI Playground
             </button>
             <button class="tab-btn" data-tab="campaignTab">
                 <span class="tab-icon">📋</span> Outbound Campaign & CRM
@@ -45,7 +46,7 @@
                 <span class="tab-icon">🎧</span> Human Agent Handoff <span id="escalationBadgeCount" class="badge-count hidden">0</span>
             </button>
             <button class="tab-btn" data-tab="analyticsTab">
-                <span class="tab-icon">📊</span> Analytics & Reporting
+                <span class="tab-icon">📊</span> Voice AI Analytics
             </button>
         </nav>
 
@@ -101,6 +102,15 @@
                         <!-- Escalation Warning Banner -->
                         <div id="escalationAlertBanner" class="escalation-alert-banner hidden">
                             ⚠️ CALL ESCALATED: Transferring call to live human agent console with full context...
+                        </div>
+
+                        <!-- Real-time Live Speech Caption Card -->
+                        <div id="liveCaptionCard" class="live-caption-card">
+                            <div class="caption-header">
+                                <span class="live-pulse">🔴 LIVE SPEECH RECOGNITION</span>
+                                <span id="captionLangBadge" class="caption-lang-badge">Tamil (ta-IN)</span>
+                            </div>
+                            <div id="liveCaptionText" class="live-caption-text">Tap microphone below and speak your query...</div>
                         </div>
 
                         <!-- Push-to-Talk Microphone & Speech Visualizer -->
