@@ -44,6 +44,12 @@ stt_service = STTService()
 intent_classifier = IntentClassifier()
 audio_service = AudioRetrievalService()
 
+from app.config import HF_TOKEN
+if HF_TOKEN:
+    logger.info("🤗 HuggingFace Token Detected! Serverless Whisper STT & SentenceTransformers Vector Inference active via HF Cloud GPUs (0 MB RAM).")
+else:
+    logger.info("Running in lightweight RAM-optimized mode (< 45MB RAM). Add HF_TOKEN in Render environment to enable HF Cloud GPUs.")
+
 app = FastAPI(
     title="AI-Powered Outbound Voice Calling System with Human Handoff",
     description="Automated Tamil outbound calls with multi-turn intent understanding, backend CRM/Policy lookups, pre-recorded & TTS responses, and seamless human handoff.",
