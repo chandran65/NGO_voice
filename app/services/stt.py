@@ -131,6 +131,23 @@ class STTService:
         # Convert WebM / MP4 / OGG browser audio to standard PCM WAV bytes
         wav_bytes = convert_audio_to_wav_bytes(audio_bytes)
 
+        # 0. Hugging Face Serverless Whisper Inference API (0 MB RAM Usage)
+        from app.config import HF_TOKEN
+        if HF_TOKEN:
+            try:
+                import requests
+                headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+                api_url = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
+                res = requests.post(api_url, headers=headers, data=wav_bytes, timeout=10)
+                if res.status_code == 200:
+                    hf_result = res.json()
+                    hf_text = hf_result.get("text", "").strip() if isinstance(hf_result, dict) else ""
+                    if hf_text:
+                        logger.info(f"HuggingFace Whisper decoded: '{hf_text}'")
+                        return hf_text, detect_language_from_text(hf_text)
+            except Exception as hf_err:
+                logger.warning(f"HuggingFace Whisper API note: {hf_err}")
+
         # 1. Fast Sub-120ms SpeechRecognition (ta-IN & en-IN with native ARM64 FLAC)
         try:
             import speech_recognition as sr
